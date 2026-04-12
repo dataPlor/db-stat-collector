@@ -84,9 +84,17 @@ ensure_go() {
     local tmp
     tmp="$(mktemp -d)"
     echo "==> Installing Go ${GO_VERSION} (${arch}) from ${url}"
-    curl -fsSL "${url}"        -o "${tmp}/${tarball}"
-    curl -fsSL "${url}.sha256" -o "${tmp}/${tarball}.sha256"
-    (cd "${tmp}" && echo "$(cat "${tarball}.sha256")  ${tarball}" | sha256sum -c -)
+    curl -fsSL "${url}" -o "${tmp}/${tarball}"
+
+    local expected actual
+    expected="$(curl -fsSL "${url}.sha256" | tr -d '[:space:]')"
+    actual="$(sha256sum "${tmp}/${tarball}" | awk '{print $1}')"
+    if [[ -z "${expected}" || "${expected}" != "${actual}" ]]; then
+        echo "Go tarball checksum mismatch: expected='${expected}' actual='${actual}'" >&2
+        rm -rf "${tmp}"
+        exit 1
+    fi
+
     rm -rf /usr/local/go
     tar -C /usr/local -xzf "${tmp}/${tarball}"
     rm -rf "${tmp}"
