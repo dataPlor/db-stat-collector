@@ -77,18 +77,19 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("querying pg_stat_database: %w", err)
 	}
 
+	// CASE WHEN rather than FILTER so the query works on poolers and older
+	// servers that don't parse the SQL:2003 FILTER clause.
 	err = c.pool.QueryRow(ctx, `
 		SELECT
-			count(*) FILTER (WHERE state = 'active')::int,
-			count(*) FILTER (WHERE state = 'idle')::int,
-			count(*) FILTER (WHERE state IN ('idle in transaction', 'idle in transaction (aborted)'))::int,
-			count(*)::int,
-			count(*) FILTER (WHERE wait_event_type = 'Lock')::int,
-			COALESCE(EXTRACT(EPOCH FROM max(clock_timestamp() - query_start)) FILTER (WHERE state = 'active'), 0)::float8,
-			COALESCE(EXTRACT(EPOCH FROM max(clock_timestamp() - xact_start)), 0)::float8
+			COALESCE(SUM(CASE WHEN state = 'active' THEN 1 ELSE 0 END), 0)::int,
+			COALESCE(SUM(CASE WHEN state = 'idle'   THEN 1 ELSE 0 END), 0)::int,
+			COALESCE(SUM(CASE WHEN state IN ('idle in transaction', 'idle in transaction (aborted)') THEN 1 ELSE 0 END), 0)::int,
+			COUNT(*)::int,
+			COALESCE(SUM(CASE WHEN wait_event_type = 'Lock' THEN 1 ELSE 0 END), 0)::int,
+			COALESCE(EXTRACT(EPOCH FROM MAX(CASE WHEN state = 'active' THEN clock_timestamp() - query_start END)), 0)::float8,
+			COALESCE(EXTRACT(EPOCH FROM MAX(clock_timestamp() - xact_start)), 0)::float8
 		FROM pg_stat_activity
 		WHERE pid <> pg_backend_pid()
-		  AND backend_type = 'client backend'
 	`).Scan(
 		&s.ConnActive, &s.ConnIdle, &s.ConnIdleInTxn, &s.ConnTotal,
 		&s.ConnWaitingLocks, &s.LongestQuerySec, &s.LongestXactSec,
