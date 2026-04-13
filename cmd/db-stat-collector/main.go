@@ -68,6 +68,18 @@ func run(ctx context.Context, log *slog.Logger, opts runOpts) error {
 		return fmt.Errorf("loading aws config: %w", err)
 	}
 
+	// The default resolver sometimes fails to pick up the region from IMDS
+	// even when instance-id lookup works (short internal timeout). Fill it
+	// in explicitly so PutMetricData can resolve an endpoint.
+	if awsCfg.Region == "" {
+		if region, err := fetchRegion(ctx, awsCfg); err != nil {
+			log.Warn("could not fetch region from IMDS; set AWS_REGION explicitly", "err", err)
+		} else {
+			awsCfg.Region = region
+			log.Info("resolved region from IMDS", "region", region)
+		}
+	}
+
 	if opts.instanceID == "" {
 		if id, err := fetchInstanceID(ctx, awsCfg); err != nil {
 			log.Warn("could not fetch instance id from IMDS; metrics will lack InstanceId dimension", "err", err)
@@ -154,6 +166,17 @@ func fetchInstanceID(ctx context.Context, awsCfg aws.Config) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(b)), nil
+}
+
+func fetchRegion(ctx context.Context, awsCfg aws.Config) (string, error) {
+	c := imds.NewFromConfig(awsCfg)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	out, err := c.GetRegion(ctx, &imds.GetRegionInput{})
+	if err != nil {
+		return "", err
+	}
+	return out.Region, nil
 }
 
 func getenv(k, def string) string {
