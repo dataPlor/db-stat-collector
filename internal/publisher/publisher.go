@@ -88,15 +88,7 @@ func (p *Publisher) buildMetricData(snap collector.Snapshot) []types.MetricDatum
 
 	add("Commits", rate(snap.XactCommit, p.prev.XactCommit), types.StandardUnitCountSecond)
 	add("Rollbacks", rate(snap.XactRollback, p.prev.XactRollback), types.StandardUnitCountSecond)
-	add("RowsInserted", rate(snap.TupInserted, p.prev.TupInserted), types.StandardUnitCountSecond)
-	add("RowsUpdated", rate(snap.TupUpdated, p.prev.TupUpdated), types.StandardUnitCountSecond)
-	add("RowsDeleted", rate(snap.TupDeleted, p.prev.TupDeleted), types.StandardUnitCountSecond)
-	add("RowsReturned", rate(snap.TupReturned, p.prev.TupReturned), types.StandardUnitCountSecond)
-	add("RowsFetched", rate(snap.TupFetched, p.prev.TupFetched), types.StandardUnitCountSecond)
 	add("Deadlocks", rate(snap.Deadlocks, p.prev.Deadlocks), types.StandardUnitCountSecond)
-	add("Conflicts", rate(snap.Conflicts, p.prev.Conflicts), types.StandardUnitCountSecond)
-	add("TempBytes", rate(snap.TempBytes, p.prev.TempBytes), types.StandardUnitBytesSecond)
-	add("TempFiles", rate(snap.TempFiles, p.prev.TempFiles), types.StandardUnitCountSecond)
 
 	// Cache hit ratio over the interval (not cumulative), so operators see
 	// recent pressure rather than a slowly-moving lifetime average.
@@ -104,6 +96,26 @@ func (p *Publisher) buildMetricData(snap collector.Snapshot) []types.MetricDatum
 	readDelta := snap.BlksRead - p.prev.BlksRead
 	if total := hitDelta + readDelta; total > 0 && hitDelta >= 0 && readDelta >= 0 {
 		add("CacheHitRatio", float64(hitDelta)/float64(total)*100.0, types.StandardUnitPercent)
+	}
+
+	// --- Host metrics ---
+
+	// Load and memory are instantaneous gauges.
+	add("System.LoadAverage.1m", snap.Load1, types.StandardUnitNone)
+	add("System.LoadAverage.5m", snap.Load5, types.StandardUnitNone)
+	add("System.LoadAverage.15m", snap.Load15, types.StandardUnitNone)
+	add("System.Memory.UsedPercent", snap.MemUsedPercent, types.StandardUnitPercent)
+
+	// CPU usage is derived from /proc/stat jiffy deltas. Skip if either
+	// sample is missing (e.g. first tick or /proc read failed).
+	if snap.CPUTotalJiffies > 0 && p.prev.CPUTotalJiffies > 0 &&
+		snap.CPUTotalJiffies > p.prev.CPUTotalJiffies {
+		totalDelta := snap.CPUTotalJiffies - p.prev.CPUTotalJiffies
+		idleDelta := snap.CPUIdleJiffies - p.prev.CPUIdleJiffies
+		if idleDelta <= totalDelta {
+			used := 100.0 * (1.0 - float64(idleDelta)/float64(totalDelta))
+			add("System.CPU.UsedPercent", used, types.StandardUnitPercent)
+		}
 	}
 
 	return data
