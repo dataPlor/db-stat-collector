@@ -8,10 +8,21 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// TablespaceStat is one row's worth of tablespace + disk-fullness data.
+type TablespaceStat struct {
+	Name            string
+	Location        string // resolved filesystem path
+	SizeBytes       int64  // pg_tablespace_size
+	DiskTotalBytes  uint64 // statfs total
+	DiskAvailBytes  uint64 // statfs available (excluding root-reserved)
+	DiskUsedPercent float64
+}
 
 // Snapshot is a single point-in-time sample of Postgres + host statistics.
 // Counter-style fields are cumulative; the publisher turns consecutive
@@ -42,6 +53,9 @@ type Snapshot struct {
 	Load5           float64
 	Load15          float64
 	MemUsedPercent  float64 // 100 * (1 - MemAvailable/MemTotal)
+
+	// One entry per tablespace (default + any user-defined).
+	Tablespaces []TablespaceStat
 }
 
 type Collector struct {
@@ -72,6 +86,9 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 
 	// CASE WHEN rather than FILTER so the query works on poolers and older
 	// servers that don't parse the SQL:2003 FILTER clause.
+	// LongestQuerySeconds excludes walsenders, autovacuum workers, and any
+	// manually-issued VACUUM so a long-running maintenance job doesn't trip
+	// the "stuck query" alarm.
 	err = c.pool.QueryRow(ctx, `
 		SELECT
 			COALESCE(SUM(CASE WHEN state = 'active' THEN 1 ELSE 0 END), 0)::int,
@@ -79,7 +96,13 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 			COALESCE(SUM(CASE WHEN state IN ('idle in transaction', 'idle in transaction (aborted)') THEN 1 ELSE 0 END), 0)::int,
 			COUNT(*)::int,
 			COALESCE(SUM(CASE WHEN wait_event_type = 'Lock' THEN 1 ELSE 0 END), 0)::int,
-			COALESCE(EXTRACT(EPOCH FROM MAX(CASE WHEN state = 'active' THEN clock_timestamp() - query_start END)), 0)::float8,
+			COALESCE(EXTRACT(EPOCH FROM MAX(CASE
+				WHEN state = 'active'
+				 AND COALESCE(backend_type, 'client backend') = 'client backend'
+				 AND query NOT ILIKE 'autovacuum:%'
+				 AND query NOT ILIKE 'VACUUM%'
+				THEN clock_timestamp() - query_start
+			END)), 0)::float8,
 			COALESCE(EXTRACT(EPOCH FROM MAX(clock_timestamp() - xact_start)), 0)::float8
 		FROM pg_stat_activity
 		WHERE pid <> pg_backend_pid()
@@ -104,7 +127,51 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 		s.MemUsedPercent = mem
 	}
 
+	s.Tablespaces = c.collectTablespaces(ctx)
+
 	return s, nil
+}
+
+// collectTablespaces enumerates pg_tablespace, takes pg_tablespace_size for
+// each, and statfs's the underlying directory to get disk fullness. It is
+// best-effort: any failure for an individual tablespace is dropped silently
+// rather than failing the whole collection tick.
+func (c *Collector) collectTablespaces(ctx context.Context) []TablespaceStat {
+	rows, err := c.pool.Query(ctx, `
+		WITH dd AS (
+			SELECT setting AS data_directory FROM pg_settings WHERE name = 'data_directory'
+		)
+		SELECT
+			t.spcname,
+			COALESCE(NULLIF(pg_tablespace_location(t.oid), ''), dd.data_directory) AS location,
+			pg_tablespace_size(t.oid) AS size_bytes
+		FROM pg_tablespace t, dd
+		ORDER BY t.spcname
+	`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var out []TablespaceStat
+	for rows.Next() {
+		var st TablespaceStat
+		if err := rows.Scan(&st.Name, &st.Location, &st.SizeBytes); err != nil {
+			continue
+		}
+		var fs syscall.Statfs_t
+		if err := syscall.Statfs(st.Location, &fs); err == nil {
+			bs := uint64(fs.Bsize)
+			st.DiskTotalBytes = fs.Blocks * bs
+			st.DiskAvailBytes = fs.Bavail * bs
+			if fs.Blocks > 0 {
+				used := fs.Blocks - fs.Bavail
+				st.DiskUsedPercent = float64(used) / float64(fs.Blocks) * 100.0
+			}
+		}
+		out = append(out, st)
+	}
+	return out
 }
 
 // readCPUStat returns (totalJiffies, idle+iowaitJiffies) from /proc/stat.

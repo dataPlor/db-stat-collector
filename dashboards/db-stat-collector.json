@@ -1,0 +1,174 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0, "y": 0, "width": 12, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": true,
+        "title": "Connections by state",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0, "max": 5000 } },
+        "annotations": {
+          "horizontal": [{ "label": "alarm threshold", "value": 5000, "color": "#d62728" }]
+        },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"Connections.Active\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "active", "id": "m1" }],
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"Connections.Idle\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "idle", "id": "m2" }],
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"Connections.IdleInTransaction\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "idle in txn", "id": "m3" }],
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"Connections.WaitingOnLock\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "waiting on lock", "id": "m4" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12, "y": 0, "width": 6, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "CPU used %",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0, "max": 100 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"System.CPU.UsedPercent\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "", "id": "m1" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 18, "y": 0, "width": 6, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Memory used %",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0, "max": 100 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"System.Memory.UsedPercent\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "", "id": "m1" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0, "y": 6, "width": 12, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Transactions per second",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"Commits\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "commits/s", "id": "m1" }],
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"Rollbacks\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "rollbacks/s", "id": "m2" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12, "y": 6, "width": 12, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Load average",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"System.LoadAverage.1m\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "1m", "id": "m1" }],
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"System.LoadAverage.5m\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "5m", "id": "m2" }],
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"System.LoadAverage.15m\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "15m", "id": "m3" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0, "y": 12, "width": 8, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Cache hit ratio %",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0, "max": 100 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"CacheHitRatio\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "", "id": "m1" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8, "y": 12, "width": 8, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Deadlocks / sec",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"Deadlocks\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "", "id": "m1" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16, "y": 12, "width": 8, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Longest query / transaction (seconds)",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Maximum",
+        "yAxis": { "left": { "min": 0 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"LongestQuerySeconds\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Maximum', 10)", "label": "query", "id": "m1" }],
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"LongestTransactionSeconds\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Maximum', 10)", "label": "transaction", "id": "m2" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0, "y": 18, "width": 12, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Tablespace disk used %",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0, "max": 100 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId,Tablespace} MetricName=\"Tablespace.DiskUsedPercent\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "", "id": "m1" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12, "y": 18, "width": 12, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Tablespace size (bytes)",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId,Tablespace} MetricName=\"Tablespace.SizeBytes\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "", "id": "m1" }]
+        ]
+      }
+    }
+  ]
+}

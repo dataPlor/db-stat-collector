@@ -48,15 +48,18 @@ func (p *Publisher) buildMetricData(snap collector.Snapshot) []types.MetricDatum
 	ts := snap.Timestamp
 	var data []types.MetricDatum
 
-	add := func(name string, value float64, unit types.StandardUnit) {
+	addWith := func(name string, value float64, unit types.StandardUnit, dims []types.Dimension) {
 		data = append(data, types.MetricDatum{
 			MetricName:        aws.String(name),
 			Value:             aws.Float64(value),
 			Unit:              unit,
 			Timestamp:         aws.Time(ts),
-			Dimensions:        p.dimensions,
+			Dimensions:        dims,
 			StorageResolution: aws.Int32(1),
 		})
+	}
+	add := func(name string, value float64, unit types.StandardUnit) {
+		addWith(name, value, unit, p.dimensions)
 	}
 
 	// Instantaneous gauges — always published.
@@ -115,6 +118,21 @@ func (p *Publisher) buildMetricData(snap collector.Snapshot) []types.MetricDatum
 		if idleDelta <= totalDelta {
 			used := 100.0 * (1.0 - float64(idleDelta)/float64(totalDelta))
 			add("System.CPU.UsedPercent", used, types.StandardUnitPercent)
+		}
+	}
+
+	// Per-tablespace metrics get an extra Tablespace dimension.
+	for _, tsp := range snap.Tablespaces {
+		dims := make([]types.Dimension, 0, len(p.dimensions)+1)
+		dims = append(dims, p.dimensions...)
+		dims = append(dims, types.Dimension{
+			Name:  aws.String("Tablespace"),
+			Value: aws.String(tsp.Name),
+		})
+		addWith("Tablespace.SizeBytes", float64(tsp.SizeBytes), types.StandardUnitBytes, dims)
+		if tsp.DiskTotalBytes > 0 {
+			addWith("Tablespace.DiskUsedPercent", tsp.DiskUsedPercent, types.StandardUnitPercent, dims)
+			addWith("Tablespace.DiskAvailBytes", float64(tsp.DiskAvailBytes), types.StandardUnitBytes, dims)
 		}
 	}
 
