@@ -5,13 +5,14 @@
 # Usage:
 #   dashboards/alarms.sh <cluster-name> [region]
 #
-# Optional env:
-#   SNS_TOPIC_ARN   override the default Slack topic
-#                   (arn:aws:sns:us-east-1:930917098718:dataplor-slack-dar)
-#                   on both ALARM and OK transitions.
+# Notifications are hardcoded to the ptu-alerts SNS topic on both ALARM and
+# OK transitions. Each alarm is named "<cluster>-<instance>-<suffix>", so a
+# 3-instance cluster ends up with 18 alarms (6 per instance). Re-running
+# this script upserts existing alarms; it does NOT delete alarms for
+# instances that have gone away.
 #
-# Each alarm is named "<cluster>-<short-name>". Re-running the script
-# updates existing alarms in-place (CloudWatch put-metric-alarm is upsert).
+# Discovery happens at script run-time via list-metrics, so re-run this
+# after scaling the cluster.
 
 set -euo pipefail
 
@@ -23,110 +24,125 @@ if [[ -z "$CLUSTER" ]]; then
     exit 1
 fi
 
-SNS_TOPIC_ARN="${SNS_TOPIC_ARN:-arn:aws:sns:us-east-1:930917098718:dataplor-slack-dar}"
+SNS_TOPIC_ARN="arn:aws:sns:us-east-1:930917098718:ptu-alerts"
 ACTIONS=(--alarm-actions "$SNS_TOPIC_ARN" --ok-actions "$SNS_TOPIC_ARN")
 
-NAME_PREFIX="$(printf '%s' "$CLUSTER" | tr -c 'A-Za-z0-9-_' '-')"
+CLUSTER_PREFIX="$(printf '%s' "$CLUSTER" | tr -c 'A-Za-z0-9-_' '-')"
 NS="PostgreSQL"
 
-echo "==> Setting up alarms for cluster='${CLUSTER}' region=${REGION}"
+echo "==> Discovering InstanceIds reporting under cluster='${CLUSTER}'"
+INSTANCE_IDS=()
+while IFS= read -r iid; do
+    [[ -n "$iid" ]] && INSTANCE_IDS+=("$iid")
+done < <(aws cloudwatch list-metrics \
+    --region "$REGION" \
+    --namespace "$NS" \
+    --metric-name "Connections.Total" \
+    --dimensions Name=ClusterName,Value="$CLUSTER" \
+    --query 'Metrics[].Dimensions[?Name==`InstanceId`].Value' \
+    --output text 2>/dev/null | tr '\t' '\n' | sort -u)
 
-# put_alarm <suffix> <description> <comparison-op> <threshold> <metric-json>
-put_alarm() {
-    local suffix="$1" desc="$2" op="$3" threshold="$4" metrics_json="$5"
-    local name="${NAME_PREFIX}-${suffix}"
+if [[ ${#INSTANCE_IDS[@]} -eq 0 ]]; then
+    echo "  No InstanceIds found. Run install.sh on at least one instance first," >&2
+    echo "  wait ~30s for metrics to appear, then rerun this script." >&2
+    exit 1
+fi
+
+echo "  Found ${#INSTANCE_IDS[@]}: ${INSTANCE_IDS[*]}"
+
+# put_simple <iid> <suffix> <description> <metric-name> <stat> <op> <threshold>
+put_simple() {
+    local iid="$1" suffix="$2" desc="$3" metric="$4" stat="$5" op="$6" threshold="$7"
+    local name="${CLUSTER_PREFIX}-${iid}-${suffix}"
     echo "    - ${name}"
     aws cloudwatch put-metric-alarm \
         --region "$REGION" \
         --alarm-name "$name" \
-        --alarm-description "$desc" \
-        --comparison-operator "$op" \
+        --alarm-description "${desc} (${iid})" \
+        --namespace "$NS" \
+        --metric-name "$metric" \
+        --dimensions Name=ClusterName,Value="$CLUSTER" Name=InstanceId,Value="$iid" \
+        --statistic "$stat" \
+        --period 60 \
         --evaluation-periods 3 \
         --datapoints-to-alarm 3 \
         --threshold "$threshold" \
+        --comparison-operator "$op" \
         --treat-missing-data notBreaching \
-        --metrics "$metrics_json" \
         "${ACTIONS[@]}"
 }
 
-# Single-metric helper: aggregate a search expression (max/avg/sum) across all
-# instances in the cluster, returning one time series for the alarm to compare.
-search_alarm() {
-    local suffix="$1" desc="$2" op="$3" threshold="$4"
-    local metric_name="$5" agg="$6" stat="$7" period="$8" missing="${9:-notBreaching}"
-
+# TPS needs commits + rollbacks combined, so use a 2-metric math expression.
+put_tps() {
+    local iid="$1"
+    local name="${CLUSTER_PREFIX}-${iid}-tps-low"
     local metrics
-    metrics=$(cat <<JSON
-[
-  {
-    "Id": "agg",
-    "Expression": "${agg}(SEARCH('Namespace=\"${NS}\" MetricName=\"${metric_name}\" ClusterName=\"${CLUSTER}\"', '${stat}', ${period}))",
-    "Label": "${metric_name}",
-    "ReturnData": true
-  }
-]
-JSON
+    metrics=$(python3 - "$NS" "$CLUSTER" "$iid" <<'PY'
+import json, sys
+ns, cluster, iid = sys.argv[1:]
+def stat(name, mid):
+    return {
+        "Id": mid,
+        "MetricStat": {
+            "Metric": {
+                "Namespace": ns,
+                "MetricName": name,
+                "Dimensions": [
+                    {"Name": "ClusterName", "Value": cluster},
+                    {"Name": "InstanceId",  "Value": iid},
+                ],
+            },
+            "Period": 60,
+            "Stat": "Average",
+        },
+        "ReturnData": False,
+    }
+print(json.dumps([
+    stat("Commits", "c"),
+    stat("Rollbacks", "r"),
+    {"Id": "tps", "Expression": "c + r", "Label": "TPS",
+     "Period": 60, "ReturnData": True},
+]))
+PY
 )
-    local name="${NAME_PREFIX}-${suffix}"
     echo "    - ${name}"
     aws cloudwatch put-metric-alarm \
         --region "$REGION" \
         --alarm-name "$name" \
-        --alarm-description "$desc" \
-        --comparison-operator "$op" \
+        --alarm-description "Transactions/sec dropped below 5 (${iid})" \
+        --comparison-operator LessThanThreshold \
         --evaluation-periods 3 \
         --datapoints-to-alarm 3 \
-        --threshold "$threshold" \
-        --treat-missing-data "$missing" \
+        --threshold 5 \
+        --treat-missing-data notBreaching \
         --metrics "$metrics" \
         "${ACTIONS[@]}"
 }
 
-# 1. Connections > 5000 (any instance)
-search_alarm connections-high \
-    "Total Postgres connections exceeded 5000" \
-    GreaterThanThreshold 5000 \
-    "Connections.Total" MAX Average 60
+echo "==> Putting alarms"
+for iid in "${INSTANCE_IDS[@]}"; do
+    put_simple "$iid" connections-high \
+        "Total Postgres connections exceeded 5000" \
+        "Connections.Total" Average GreaterThanThreshold 5000
 
-# 2. CPU > 80% (any instance)
-search_alarm cpu-high \
-    "CPU used > 80%" \
-    GreaterThanThreshold 80 \
-    "System.CPU.UsedPercent" MAX Average 60
+    put_simple "$iid" cpu-high \
+        "CPU used > 80%" \
+        "System.CPU.UsedPercent" Average GreaterThanThreshold 80
 
-# 3. TPS (commits + rollbacks) < 5 across the cluster
-TPS_METRICS=$(cat <<JSON
-[
-  {
-    "Id": "tps",
-    "Expression": "SUM(SEARCH('Namespace=\"${NS}\" MetricName=\"Commits\" ClusterName=\"${CLUSTER}\"', 'Average', 60)) + SUM(SEARCH('Namespace=\"${NS}\" MetricName=\"Rollbacks\" ClusterName=\"${CLUSTER}\"', 'Average', 60))",
-    "Label": "TPS",
-    "ReturnData": true
-  }
-]
-JSON
-)
-put_alarm tps-low \
-    "Cluster transactions/sec dropped below 5" \
-    LessThanThreshold 5 "$TPS_METRICS"
+    put_tps "$iid"
 
-# 4. Cache hit ratio < 80%
-search_alarm cache-hit-low \
-    "Cache hit ratio dropped below 80%" \
-    LessThanThreshold 80 \
-    "CacheHitRatio" AVG Average 60
+    put_simple "$iid" cache-hit-low \
+        "Cache hit ratio dropped below 80%" \
+        "CacheHitRatio" Average LessThanThreshold 80
 
-# 5. Deadlocks > 5/sec across the cluster
-search_alarm deadlocks-high \
-    "Deadlocks exceeded 5/sec" \
-    GreaterThanThreshold 5 \
-    "Deadlocks" SUM Average 60
+    put_simple "$iid" deadlocks-high \
+        "Deadlocks exceeded 5/sec" \
+        "Deadlocks" Average GreaterThanThreshold 5
 
-# 6. Longest non-vacuum non-replication query > 24h (86400s)
-search_alarm long-query \
-    "A non-vacuum non-replication query has been running for over 24 hours" \
-    GreaterThanThreshold 86400 \
-    "LongestQuerySeconds" MAX Maximum 60
+    put_simple "$iid" long-query \
+        "A non-vacuum non-replication query has been running for over 24 hours" \
+        "LongestQuerySeconds" Maximum GreaterThanThreshold 86400
+done
 
 echo "==> Done"
-echo "    https://${REGION}.console.aws.amazon.com/cloudwatch/home?region=${REGION}#alarmsV2:?search=${NAME_PREFIX}-"
+echo "    https://${REGION}.console.aws.amazon.com/cloudwatch/home?region=${REGION}#alarmsV2:?search=${CLUSTER_PREFIX}-"
