@@ -11,7 +11,7 @@ A small Go worker that runs on a PostgreSQL EC2 instance, samples Postgres and h
 On an Ubuntu EC2 instance (root, in one line):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/benjaminsanborn/db-stat-collector/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/dataplor/db-stat-collector/main/install.sh | sudo bash
 ```
 
 The installer bootstraps everything it needs: installs `git`/`curl`/`ca-certificates` via apt, fetches Go from `dl.google.com` (with sha256 verification) if missing, clones the repo, builds the binary, writes `/etc/db-stat-collector/config.env`, and enables a systemd unit that starts on boot.
@@ -21,7 +21,7 @@ The installer bootstraps everything it needs: installs `git`/`curl`/`ca-certific
 Pass flags after `-- ` to tune the install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/benjaminsanborn/db-stat-collector/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/datplor/db-stat-collector/main/install.sh \
   | sudo bash -s -- --database orders --cluster orders-primary
 ```
 
