@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/datplor/db-stat-collector/main/inst
 | `--interval`    | `2s`                                               | Collection interval (Go duration)              |
 | `--cluster`     | *unset*                                            | Optional `ClusterName` dimension               |
 | `--user`        | `postgres`                                         | Unix user the service runs as                  |
-| `--repo-url`    | `https://github.com/benjaminsanborn/db-stat-collector.git` | Git remote to clone                 |
+| `--repo-url`    | `https://github.com/dataplor/db-stat-collector.git` | Git remote to clone                 |
 | `--repo-ref`    | `main`                                             | Branch / tag / sha                             |
 | `--go-version`  | `1.23.4`                                           | Go version to install if missing               |
 

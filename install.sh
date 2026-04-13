@@ -6,10 +6,10 @@ fail() { echo "  Error: $1" >&2; exit 1; }
 # db-stat-collector install script
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/benjaminsanborn/db-stat-collector/main/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/dataplor/db-stat-collector/main/install.sh | sudo bash
 #
 # With flags (note the `-- ` to pass through to the script):
-#   curl -fsSL https://raw.githubusercontent.com/benjaminsanborn/db-stat-collector/main/install.sh | sudo bash -s -- --database orders
+#   curl -fsSL https://raw.githubusercontent.com/dataplor/db-stat-collector/main/install.sh | sudo bash -s -- --database orders
 #
 # Flags:
 #   --database NAME    Database to monitor (default: postgres)
@@ -18,7 +18,7 @@ fail() { echo "  Error: $1" >&2; exit 1; }
 #   --interval DUR     Collection interval (default: 2s)
 #   --cluster NAME     Optional ClusterName dimension
 #   --user USER        Unix user to run service as (default: postgres)
-#   --repo-url URL     Git remote to clone (default: github.com/benjaminsanborn/db-stat-collector)
+#   --repo-url URL     Git remote to clone (default: github.com/dataplor/db-stat-collector)
 #   --repo-ref REF     Branch/tag/sha (default: main)
 #   --go-version VER   Go to install if missing (default: 1.23.4)
 
@@ -37,7 +37,7 @@ CW_NAMESPACE="PostgreSQL"
 COLLECT_INTERVAL="2s"
 CLUSTER=""
 SERVICE_USER="postgres"
-REPO_URL="https://github.com/benjaminsanborn/db-stat-collector.git"
+REPO_URL="https://github.com/dataplor/db-stat-collector.git"
 REPO_REF="main"
 GO_VERSION="1.23.4"
 

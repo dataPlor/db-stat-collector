@@ -24,6 +24,14 @@ type TablespaceStat struct {
 	DiskUsedPercent float64
 }
 
+// WaitEventCount is the number of currently-active client backends in a
+// given pg_stat_activity wait_event_type bucket. wait_event_type=NULL is
+// reported here as "CPU" (i.e. the backend is running, not waiting).
+type WaitEventCount struct {
+	Type  string
+	Count int
+}
+
 // Snapshot is a single point-in-time sample of Postgres + host statistics.
 // Counter-style fields are cumulative; the publisher turns consecutive
 // snapshots into rates.
@@ -56,6 +64,9 @@ type Snapshot struct {
 
 	// One entry per tablespace (default + any user-defined).
 	Tablespaces []TablespaceStat
+
+	// One entry per wait_event_type bucket among active client backends.
+	WaitEvents []WaitEventCount
 }
 
 type Collector struct {
@@ -128,8 +139,39 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 	}
 
 	s.Tablespaces = c.collectTablespaces(ctx)
+	s.WaitEvents = c.collectWaitEvents(ctx)
 
 	return s, nil
+}
+
+// collectWaitEvents counts active client backends grouped by wait_event_type.
+// NULL wait_event_type (= not waiting on anything) is bucketed as "CPU" so the
+// stacked total across types equals the active query count.
+func (c *Collector) collectWaitEvents(ctx context.Context) []WaitEventCount {
+	rows, err := c.pool.Query(ctx, `
+		SELECT
+			COALESCE(wait_event_type, 'CPU') AS wait_event_type,
+			COUNT(*)::int AS n
+		FROM pg_stat_activity
+		WHERE state = 'active'
+		  AND pid <> pg_backend_pid()
+		  AND COALESCE(backend_type, 'client backend') = 'client backend'
+		GROUP BY 1
+	`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var out []WaitEventCount
+	for rows.Next() {
+		var w WaitEventCount
+		if err := rows.Scan(&w.Type, &w.Count); err != nil {
+			continue
+		}
+		out = append(out, w)
+	}
+	return out
 }
 
 // collectTablespaces enumerates pg_tablespace, takes pg_tablespace_size for

@@ -121,6 +121,17 @@ func (p *Publisher) buildMetricData(snap collector.Snapshot) []types.MetricDatum
 		}
 	}
 
+	// Per-wait-event-type counts of active backends.
+	for _, w := range snap.WaitEvents {
+		dims := make([]types.Dimension, 0, len(p.dimensions)+1)
+		dims = append(dims, p.dimensions...)
+		dims = append(dims, types.Dimension{
+			Name:  aws.String("WaitEventType"),
+			Value: aws.String(w.Type),
+		})
+		addWith("WaitEvents.Count", float64(w.Count), types.StandardUnitCount, dims)
+	}
+
 	// Per-tablespace metrics get an extra Tablespace dimension.
 	for _, tsp := range snap.Tablespaces {
 		dims := make([]types.Dimension, 0, len(p.dimensions)+1)
