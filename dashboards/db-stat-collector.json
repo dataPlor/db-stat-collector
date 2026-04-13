@@ -57,13 +57,13 @@
       "properties": {
         "view": "timeSeries",
         "stacked": true,
-        "title": "Active query wait events (by wait_event_type)",
+        "title": "Active query wait events (wait_event_type:wait_event)",
         "region": "REGION_PLACEHOLDER",
         "period": 10,
         "stat": "Average",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [
-          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId,WaitEventType} MetricName=\"WaitEvents.Count\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "", "id": "m1" }]
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId,WaitEvent} MetricName=\"WaitEvents.Count\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "", "id": "m1" }]
         ]
       }
     },

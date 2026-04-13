@@ -25,10 +25,11 @@ type TablespaceStat struct {
 }
 
 // WaitEventCount is the number of currently-active client backends in a
-// given pg_stat_activity wait_event_type bucket. wait_event_type=NULL is
-// reported here as "CPU" (i.e. the backend is running, not waiting).
+// given pg_stat_activity wait bucket. The bucket is "<wait_event_type>:<wait_event>"
+// (e.g. "Lock:relation", "IO:DataFileRead") or the synthetic value "CPU" when
+// the backend isn't waiting on anything.
 type WaitEventCount struct {
-	Type  string
+	Event string
 	Count int
 }
 
@@ -144,13 +145,14 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 	return s, nil
 }
 
-// collectWaitEvents counts active client backends grouped by wait_event_type.
-// NULL wait_event_type (= not waiting on anything) is bucketed as "CPU" so the
-// stacked total across types equals the active query count.
+// collectWaitEvents counts active client backends grouped by
+// "<wait_event_type>:<wait_event>". Backends with NULL wait_event_type
+// (= not waiting on anything) are bucketed as "CPU" so the stacked total
+// across buckets equals the active query count.
 func (c *Collector) collectWaitEvents(ctx context.Context) []WaitEventCount {
 	rows, err := c.pool.Query(ctx, `
 		SELECT
-			COALESCE(wait_event_type, 'CPU') AS wait_event_type,
+			COALESCE(wait_event_type || ':' || wait_event, 'CPU') AS bucket,
 			COUNT(*)::int AS n
 		FROM pg_stat_activity
 		WHERE state = 'active'
@@ -166,7 +168,7 @@ func (c *Collector) collectWaitEvents(ctx context.Context) []WaitEventCount {
 	var out []WaitEventCount
 	for rows.Next() {
 		var w WaitEventCount
-		if err := rows.Scan(&w.Type, &w.Count); err != nil {
+		if err := rows.Scan(&w.Event, &w.Count); err != nil {
 			continue
 		}
 		out = append(out, w)
