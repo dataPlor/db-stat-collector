@@ -47,13 +47,14 @@ type Snapshot struct {
 	Deadlocks    int64
 
 	// pg_stat_activity gauges
-	ConnActive       int
-	ConnIdle         int
-	ConnIdleInTxn    int
-	ConnTotal        int
-	ConnWaitingLocks int
-	LongestQuerySec  float64
-	LongestXactSec   float64
+	ConnActive          int
+	ConnIdle            int
+	ConnIdleInTxn       int
+	ConnTotal           int
+	ConnWaitingLocks    int
+	LongestQuerySec     float64 // active user queries; excludes vacuum/replication
+	LongestUserXactSec  float64 // open transactions on client backends; excludes vacuum/replication
+	LongestVacuumSec    float64 // autovacuum workers + manual VACUUM — whichever has been running longest
 
 	// Host stats from /proc
 	CPUTotalJiffies uint64  // sum of all cpu-time fields on the cpu line
@@ -97,10 +98,11 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 	}
 
 	// CASE WHEN rather than FILTER so the query works on poolers and older
-	// servers that don't parse the SQL:2003 FILTER clause.
-	// LongestQuerySeconds excludes walsenders, autovacuum workers, and any
-	// manually-issued VACUUM so a long-running maintenance job doesn't trip
-	// the "stuck query" alarm.
+	// servers that don't parse the SQL:2003 FILTER clause. The
+	// LongestUserQuery/LongestUserXact metrics exclude walsenders,
+	// autovacuum workers, and manually-issued VACUUM so long-running
+	// maintenance doesn't mask real "stuck query" signal. Vacuum runtime
+	// is reported separately as LongestVacuumSec.
 	err = c.pool.QueryRow(ctx, `
 		SELECT
 			COALESCE(SUM(CASE WHEN state = 'active' THEN 1 ELSE 0 END), 0)::int,
@@ -115,12 +117,23 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 				 AND query NOT ILIKE 'VACUUM%'
 				THEN clock_timestamp() - query_start
 			END)), 0)::float8,
-			COALESCE(EXTRACT(EPOCH FROM MAX(clock_timestamp() - xact_start)), 0)::float8
+			COALESCE(EXTRACT(EPOCH FROM MAX(CASE
+				WHEN COALESCE(backend_type, 'client backend') = 'client backend'
+				 AND query NOT ILIKE 'autovacuum:%'
+				 AND query NOT ILIKE 'VACUUM%'
+				THEN clock_timestamp() - xact_start
+			END)), 0)::float8,
+			COALESCE(EXTRACT(EPOCH FROM MAX(CASE
+				WHEN COALESCE(backend_type, '') = 'autovacuum worker'
+				  OR query ILIKE 'autovacuum:%'
+				  OR query ILIKE 'VACUUM%'
+				THEN clock_timestamp() - query_start
+			END)), 0)::float8
 		FROM pg_stat_activity
 		WHERE pid <> pg_backend_pid()
 	`).Scan(
 		&s.ConnActive, &s.ConnIdle, &s.ConnIdleInTxn, &s.ConnTotal,
-		&s.ConnWaitingLocks, &s.LongestQuerySec, &s.LongestXactSec,
+		&s.ConnWaitingLocks, &s.LongestQuerySec, &s.LongestUserXactSec, &s.LongestVacuumSec,
 	)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("querying pg_stat_activity: %w", err)
@@ -145,10 +158,9 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 	return s, nil
 }
 
-// collectWaitEvents counts active client backends grouped by
-// "<wait_event_type>:<wait_event>". Backends with NULL wait_event_type
-// (= not waiting on anything) are bucketed as "CPU" so the stacked total
-// across buckets equals the active query count.
+// collectWaitEvents counts all active backends (client + background, e.g.
+// autovacuum, walsender) grouped by "<wait_event_type>:<wait_event>".
+// Backends with NULL wait_event_type are bucketed as "CPU".
 func (c *Collector) collectWaitEvents(ctx context.Context) []WaitEventCount {
 	rows, err := c.pool.Query(ctx, `
 		SELECT
@@ -157,7 +169,6 @@ func (c *Collector) collectWaitEvents(ctx context.Context) []WaitEventCount {
 		FROM pg_stat_activity
 		WHERE state = 'active'
 		  AND pid <> pg_backend_pid()
-		  AND COALESCE(backend_type, 'client backend') = 'client backend'
 		GROUP BY 1
 	`)
 	if err != nil {

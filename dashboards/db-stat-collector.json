@@ -140,14 +140,15 @@
       "properties": {
         "view": "timeSeries",
         "stacked": false,
-        "title": "Longest query / transaction (seconds)",
+        "title": "Longest query / user txn / vacuum (seconds)",
         "region": "REGION_PLACEHOLDER",
         "period": 10,
         "stat": "Maximum",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [
-          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"LongestQuerySeconds\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Maximum', 10)", "label": "query", "id": "m1" }],
-          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"LongestTransactionSeconds\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Maximum', 10)", "label": "transaction", "id": "m2" }]
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"LongestQuerySeconds\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Maximum', 10)", "label": "user query", "id": "m1" }],
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"LongestUserTransactionSeconds\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Maximum', 10)", "label": "user txn", "id": "m2" }],
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId} MetricName=\"LongestVacuumSeconds\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Maximum', 10)", "label": "vacuum", "id": "m3" }]
         ]
       }
     },

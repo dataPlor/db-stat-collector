@@ -73,7 +73,7 @@ Config lives at `/etc/db-stat-collector/config.env` — edit and restart to chan
 
 All metrics are published to the `PostgreSQL` namespace (override with `--namespace`) at 1-second storage resolution. Every datum carries `InstanceId` (from IMDS) and optionally `ClusterName` as dimensions.
 
-### Postgres
+### Postgres — connections & activity
 
 | Metric                              | Unit       | Source                                                         |
 | ----------------------------------- | ---------- | -------------------------------------------------------------- |
@@ -82,30 +82,66 @@ All metrics are published to the `PostgreSQL` namespace (override with `--namesp
 | `Connections.IdleInTransaction`     | Count      | `state in ('idle in transaction', 'idle in transaction (aborted)')` |
 | `Connections.Total`                 | Count      | row count in `pg_stat_activity`                                |
 | `Connections.WaitingOnLock`         | Count      | `wait_event_type = 'Lock'`                                     |
-| `LongestQuerySeconds`               | Seconds    | `max(now() - query_start)` across active backends              |
-| `LongestTransactionSeconds`         | Seconds    | `max(now() - xact_start)` across all backends                  |
-| `Commits`                           | Count/s    | rate of `pg_stat_database.xact_commit` across all databases    |
-| `Rollbacks`                         | Count/s    | rate of `pg_stat_database.xact_rollback`                       |
-| `Deadlocks`                         | Count/s    | rate of `pg_stat_database.deadlocks`                           |
-| `CacheHitRatio`                     | Percent    | `blks_hit / (blks_hit + blks_read)` over the tick interval    |
+| `LongestQuerySeconds`               | Seconds    | `max(now() - query_start)` across active **client** backends, excluding autovacuum and manual `VACUUM` |
+| `LongestUserTransactionSeconds`     | Seconds    | `max(now() - xact_start)` across client backends, excluding autovacuum and manual `VACUUM` |
+| `LongestVacuumSeconds`              | Seconds    | `max(now() - query_start)` across autovacuum workers + manual `VACUUM` |
+
+### Postgres — throughput & cache
+
+| Metric            | Unit    | Source                                                       |
+| ----------------- | ------- | ------------------------------------------------------------ |
+| `Commits`         | Count/s | rate of `pg_stat_database.xact_commit` across all databases  |
+| `Rollbacks`       | Count/s | rate of `pg_stat_database.xact_rollback`                     |
+| `Deadlocks`       | Count/s | rate of `pg_stat_database.deadlocks`                         |
+| `CacheHitRatio`   | Percent | `blks_hit / (blks_hit + blks_read)` over the tick interval   |
 
 Rates are computed as deltas between consecutive snapshots, so counter resets (`pg_stat_reset`) produce a single zero tick rather than a spike.
 
+### Wait events
+
+| Metric              | Unit  | Dimensions                                                | Source                                                            |
+| ------------------- | ----- | --------------------------------------------------------- | ----------------------------------------------------------------- |
+| `WaitEvents.Count`  | Count | `+ WaitEvent` (= `<wait_event_type>:<wait_event>` or `CPU`) | all active backends (client + autovacuum + walsender) grouped by `wait_event_type \|\| ':' \|\| wait_event`; NULL bucketed as `CPU` |
+
+Stacked in the dashboard. The total across all `WaitEvent` buckets equals the active-query count, so you can see at a glance whether active queries are running on CPU, waiting on locks, doing IO, etc.
+
+### Tablespaces
+
+| Metric                          | Unit    | Dimensions           | Source                                                          |
+| ------------------------------- | ------- | -------------------- | --------------------------------------------------------------- |
+| `Tablespace.SizeBytes`          | Bytes   | `+ Tablespace`       | `pg_tablespace_size(oid)` per row of `pg_tablespace`            |
+| `Tablespace.DiskUsedPercent`    | Percent | `+ Tablespace`       | `statfs(location)` → `(blocks - bavail) / blocks * 100`         |
+| `Tablespace.DiskAvailBytes`     | Bytes   | `+ Tablespace`       | `statfs(location).Bavail * Bsize`                               |
+
+`pg_default` and `pg_global` resolve to the `data_directory` setting (so their `statfs` reflects the main data volume); user-defined tablespaces use their own `CREATE TABLESPACE` path.
+
 ### Host (read from `/proc`)
 
-| Metric                       | Unit    | Source                                           |
-| ---------------------------- | ------- | ------------------------------------------------ |
-| `System.CPU.UsedPercent`     | Percent | `1 - idleΔ/totalΔ` from `/proc/stat` cpu line    |
-| `System.LoadAverage.1m`      | None    | field 1 of `/proc/loadavg`                       |
-| `System.LoadAverage.5m`      | None    | field 2 of `/proc/loadavg`                       |
-| `System.LoadAverage.15m`     | None    | field 3 of `/proc/loadavg`                       |
+| Metric                       | Unit    | Source                                                   |
+| ---------------------------- | ------- | -------------------------------------------------------- |
+| `System.CPU.UsedPercent`     | Percent | `1 - idleΔ/totalΔ` from `/proc/stat` cpu line            |
+| `System.LoadAverage.1m`      | None    | field 1 of `/proc/loadavg`                               |
+| `System.LoadAverage.5m`      | None    | field 2 of `/proc/loadavg`                               |
+| `System.LoadAverage.15m`     | None    | field 3 of `/proc/loadavg`                               |
 | `System.Memory.UsedPercent`  | Percent | `100 * (1 - MemAvailable/MemTotal)` from `/proc/meminfo` |
+
+## Dashboards and alarms
+
+```bash
+./dashboards/deploy.sh <cluster>   # creates/updates the CloudWatch dashboard named after <cluster>
+./dashboards/alarms.sh  <cluster>  # creates/updates per-instance alarms for <cluster>
+```
+
+Both scripts take an optional region as a 2nd arg (default `us-east-1`). Alarms notify `arn:aws:sns:us-east-1:930917098718:ptu-alerts` on ALARM and OK transitions. `alarms.sh` discovers `InstanceId`s via `list-metrics` at run-time, so re-run it after scaling the cluster in/out.
 
 ## Repo layout
 
 ```
 cmd/db-stat-collector/main.go     wiring: flags, IMDS lookup, ticker loop
-internal/collector/collector.go   pgx queries + /proc readers → Snapshot
+internal/collector/collector.go   pgx queries + /proc readers + statfs → Snapshot
 internal/publisher/publisher.go   Snapshot → CloudWatch MetricDatum, tracks prev for rates
 install.sh                        ubuntu installer + systemd unit
+dashboards/db-stat-collector.json dashboard template (cluster/region baked in at deploy)
+dashboards/deploy.sh              dashboard upsert script
+dashboards/alarms.sh              per-instance alarm upsert script
 ```

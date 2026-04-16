@@ -69,7 +69,8 @@ func (p *Publisher) buildMetricData(snap collector.Snapshot) []types.MetricDatum
 	add("Connections.Total", float64(snap.ConnTotal), types.StandardUnitCount)
 	add("Connections.WaitingOnLock", float64(snap.ConnWaitingLocks), types.StandardUnitCount)
 	add("LongestQuerySeconds", snap.LongestQuerySec, types.StandardUnitSeconds)
-	add("LongestTransactionSeconds", snap.LongestXactSec, types.StandardUnitSeconds)
+	add("LongestUserTransactionSeconds", snap.LongestUserXactSec, types.StandardUnitSeconds)
+	add("LongestVacuumSeconds", snap.LongestVacuumSec, types.StandardUnitSeconds)
 
 	// Counter-derived rates — need a previous snapshot.
 	if p.prev == nil {
