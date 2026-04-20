@@ -57,6 +57,22 @@
       "properties": {
         "view": "timeSeries",
         "stacked": true,
+        "title": "Active queries by normalized signature",
+        "region": "REGION_PLACEHOLDER",
+        "period": 10,
+        "stat": "Average",
+        "yAxis": { "left": { "min": 0 } },
+        "metrics": [
+          [{ "expression": "SEARCH('{PostgreSQL,ClusterName,InstanceId,Query} MetricName=\"ActiveQueries.Count\" ClusterName=\"CLUSTER_PLACEHOLDER\"', 'Average', 10)", "label": "", "id": "m1" }]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0, "y": 12, "width": 24, "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "stacked": true,
         "title": "Active query wait events (wait_event_type:wait_event)",
         "region": "REGION_PLACEHOLDER",
         "period": 10,
@@ -69,7 +85,7 @@
     },
     {
       "type": "metric",
-      "x": 0, "y": 12, "width": 12, "height": 6,
+      "x": 0, "y": 18, "width": 12, "height": 6,
       "properties": {
         "view": "timeSeries",
         "stacked": false,
@@ -86,7 +102,7 @@
     },
     {
       "type": "metric",
-      "x": 12, "y": 12, "width": 12, "height": 6,
+      "x": 12, "y": 18, "width": 12, "height": 6,
       "properties": {
         "view": "timeSeries",
         "stacked": false,
@@ -104,7 +120,7 @@
     },
     {
       "type": "metric",
-      "x": 0, "y": 18, "width": 8, "height": 6,
+      "x": 0, "y": 24, "width": 8, "height": 6,
       "properties": {
         "view": "timeSeries",
         "stacked": false,
@@ -120,7 +136,7 @@
     },
     {
       "type": "metric",
-      "x": 8, "y": 18, "width": 8, "height": 6,
+      "x": 8, "y": 24, "width": 8, "height": 6,
       "properties": {
         "view": "timeSeries",
         "stacked": false,
@@ -136,7 +152,7 @@
     },
     {
       "type": "metric",
-      "x": 16, "y": 18, "width": 8, "height": 6,
+      "x": 16, "y": 24, "width": 8, "height": 6,
       "properties": {
         "view": "timeSeries",
         "stacked": false,
@@ -154,7 +170,7 @@
     },
     {
       "type": "metric",
-      "x": 0, "y": 24, "width": 12, "height": 6,
+      "x": 0, "y": 30, "width": 12, "height": 6,
       "properties": {
         "view": "timeSeries",
         "stacked": false,
@@ -170,7 +186,7 @@
     },
     {
       "type": "metric",
-      "x": 12, "y": 24, "width": 12, "height": 6,
+      "x": 12, "y": 30, "width": 12, "height": 6,
       "properties": {
         "view": "timeSeries",
         "stacked": false,

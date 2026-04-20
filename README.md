@@ -97,6 +97,14 @@ All metrics are published to the `PostgreSQL` namespace (override with `--namesp
 
 Rates are computed as deltas between consecutive snapshots, so counter resets (`pg_stat_reset`) produce a single zero tick rather than a spike.
 
+### Active queries
+
+| Metric                  | Unit  | Dimensions | Source                                                                |
+| ----------------------- | ----- | ---------- | --------------------------------------------------------------------- |
+| `ActiveQueries.Count`   | Count | `+ Query`  | active client backends grouped by leading SQL command (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `VACUUM`, `COPY`, `BEGIN`, …, else `OTHER`); leading SQL comments are stripped before the keyword is extracted |
+
+Stacked in the dashboard. Cardinality is capped at ~15 series regardless of workload — you get a live view of "what kinds of things is Postgres doing right now" without per-statement CloudWatch cost. For per-statement drill-down, use `pg_stat_statements` directly instead.
+
 ### Wait events
 
 | Metric              | Unit  | Dimensions                                                | Source                                                            |

@@ -33,6 +33,14 @@ type WaitEventCount struct {
 	Count int
 }
 
+// ActiveQueryCount is the number of backends currently running a given
+// normalized query signature (literals stripped, whitespace collapsed,
+// truncated to fit in a CloudWatch dimension value).
+type ActiveQueryCount struct {
+	Signature string
+	Count     int
+}
+
 // Snapshot is a single point-in-time sample of Postgres + host statistics.
 // Counter-style fields are cumulative; the publisher turns consecutive
 // snapshots into rates.
@@ -69,6 +77,9 @@ type Snapshot struct {
 
 	// One entry per wait_event_type bucket among active client backends.
 	WaitEvents []WaitEventCount
+
+	// One entry per distinct normalized active query signature.
+	ActiveQueries []ActiveQueryCount
 }
 
 type Collector struct {
@@ -154,8 +165,60 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 
 	s.Tablespaces = c.collectTablespaces(ctx)
 	s.WaitEvents = c.collectWaitEvents(ctx)
+	s.ActiveQueries = c.collectActiveQueries(ctx)
 
 	return s, nil
+}
+
+// collectActiveQueries returns one entry per distinct leading SQL command
+// (SELECT, INSERT, UPDATE, DELETE, VACUUM, …) currently running on a client
+// backend. This keeps CloudWatch cardinality bounded to ~15 series regardless
+// of workload — if you need per-query drill-down, query pg_stat_statements
+// directly instead of paying for a time series per signature.
+//
+// SQL comments are stripped first so leading `/* ... */` or `-- ...` doesn't
+// hide the real command.
+func (c *Collector) collectActiveQueries(ctx context.Context) []ActiveQueryCount {
+	rows, err := c.pool.Query(ctx, `
+		SELECT
+			COALESCE(
+				UPPER(
+					SUBSTRING(
+						regexp_replace(
+							regexp_replace(query, '/\*.*?\*/', ' ', 'g'),
+							'--[^\n]*', ' ', 'g'
+						)
+						FROM '[a-zA-Z]+'
+					)
+				),
+				'OTHER'
+			) AS sig,
+			COUNT(*)::int AS n
+		FROM pg_stat_activity
+		WHERE state = 'active'
+		  AND pid <> pg_backend_pid()
+		  AND COALESCE(backend_type, 'client backend') = 'client backend'
+		  AND query <> ''
+		  AND query IS NOT NULL
+		GROUP BY 1
+	`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var out []ActiveQueryCount
+	for rows.Next() {
+		var q ActiveQueryCount
+		if err := rows.Scan(&q.Signature, &q.Count); err != nil {
+			continue
+		}
+		if q.Signature == "" {
+			continue
+		}
+		out = append(out, q)
+	}
+	return out
 }
 
 // collectWaitEvents counts all active backends (client + background, e.g.

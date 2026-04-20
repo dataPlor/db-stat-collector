@@ -122,6 +122,17 @@ func (p *Publisher) buildMetricData(snap collector.Snapshot) []types.MetricDatum
 		}
 	}
 
+	// Per-query-signature counts of active backends.
+	for _, q := range snap.ActiveQueries {
+		dims := make([]types.Dimension, 0, len(p.dimensions)+1)
+		dims = append(dims, p.dimensions...)
+		dims = append(dims, types.Dimension{
+			Name:  aws.String("Query"),
+			Value: aws.String(q.Signature),
+		})
+		addWith("ActiveQueries.Count", float64(q.Count), types.StandardUnitCount, dims)
+	}
+
 	// Per-wait-event counts of active backends. Bucket is "<type>:<event>"
 	// or "CPU".
 	for _, w := range snap.WaitEvents {
