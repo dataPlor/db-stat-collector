@@ -55,7 +55,6 @@ func (p *Publisher) buildMetricData(snap collector.Snapshot) []types.MetricDatum
 			Unit:              unit,
 			Timestamp:         aws.Time(ts),
 			Dimensions:        dims,
-			StorageResolution: aws.Int32(1),
 		})
 	}
 	add := func(name string, value float64, unit types.StandardUnit) {

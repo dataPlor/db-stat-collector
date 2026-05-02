@@ -27,7 +27,7 @@ func main() {
 	var (
 		dsn        = flag.String("pg-dsn", getenv("PG_DSN", "dbname=postgres sslmode=disable"), "PostgreSQL DSN (key=value or postgres:// URL)")
 		namespace  = flag.String("namespace", getenv("CW_NAMESPACE", "PostgreSQL"), "CloudWatch namespace")
-		interval   = flag.Duration("interval", parseDuration(getenv("COLLECT_INTERVAL", "2s"), 2*time.Second), "Collection interval")
+		interval   = flag.Duration("interval", parseDuration(getenv("COLLECT_INTERVAL", "60s"), 60*time.Second), "Collection interval")
 		publishTO  = flag.Duration("publish-timeout", parseDuration(getenv("PUBLISH_TIMEOUT", "10s"), 10*time.Second), "CloudWatch PutMetricData timeout")
 		instanceID = flag.String("instance-id", os.Getenv("INSTANCE_ID"), "Override EC2 instance id (else fetched from IMDS)")
 		cluster    = flag.String("cluster", os.Getenv("CLUSTER"), "Optional ClusterName dimension")

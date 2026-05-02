@@ -8,7 +8,7 @@
         "stacked": true,
         "title": "Connections by state",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [
@@ -27,7 +27,7 @@
         "stacked": false,
         "title": "CPU used %",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0, "max": 100 } },
         "metrics": [
@@ -43,7 +43,7 @@
         "stacked": false,
         "title": "Memory used %",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0, "max": 100 } },
         "metrics": [
@@ -59,7 +59,7 @@
         "stacked": true,
         "title": "Active queries by normalized signature",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [
@@ -75,7 +75,7 @@
         "stacked": true,
         "title": "Active query wait events (wait_event_type:wait_event)",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [
@@ -91,7 +91,7 @@
         "stacked": false,
         "title": "Transactions per second",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [
@@ -108,7 +108,7 @@
         "stacked": false,
         "title": "Load average",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [
@@ -126,7 +126,7 @@
         "stacked": false,
         "title": "Cache hit ratio %",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0, "max": 100 } },
         "metrics": [
@@ -142,7 +142,7 @@
         "stacked": false,
         "title": "Deadlocks / sec",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [
@@ -158,7 +158,7 @@
         "stacked": false,
         "title": "Longest query / user txn / vacuum (seconds)",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Maximum",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [
@@ -176,7 +176,7 @@
         "stacked": false,
         "title": "Tablespace disk used %",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0, "max": 100 } },
         "metrics": [
@@ -192,7 +192,7 @@
         "stacked": false,
         "title": "Tablespace size (bytes)",
         "region": "REGION_PLACEHOLDER",
-        "period": 10,
+        "period": 60,
         "stat": "Average",
         "yAxis": { "left": { "min": 0 } },
         "metrics": [

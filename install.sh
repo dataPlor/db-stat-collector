@@ -15,7 +15,7 @@ fail() { echo "  Error: $1" >&2; exit 1; }
 #   --database NAME    Database to monitor (default: postgres)
 #   --dsn DSN          Full libpq/postgres:// DSN; overrides --database
 #   --namespace NS     CloudWatch namespace (default: PostgreSQL)
-#   --interval DUR     Collection interval (default: 2s)
+#   --interval DUR     Collection interval (default: 60s)
 #   --cluster NAME     Optional ClusterName dimension
 #   --user USER        Unix user to run service as (default: postgres)
 #   --repo-url URL     Git remote to clone (default: github.com/dataplor/db-stat-collector)
@@ -34,7 +34,7 @@ SERVICE_FILE="/etc/systemd/system/db-stat-collector.service"
 PG_DATABASE="postgres"
 PG_DSN=""
 CW_NAMESPACE="PostgreSQL"
-COLLECT_INTERVAL="2s"
+COLLECT_INTERVAL="60s"
 CLUSTER=""
 SERVICE_USER="postgres"
 REPO_URL="https://github.com/dataplor/db-stat-collector.git"

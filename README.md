@@ -1,6 +1,6 @@
 # db-stat-collector
 
-A small Go worker that runs on a PostgreSQL EC2 instance, samples Postgres and host statistics every 2 seconds, and publishes them to CloudWatch as high-resolution custom metrics.
+A small Go worker that runs on a PostgreSQL EC2 instance, samples Postgres and host statistics every 60 seconds, and publishes them to CloudWatch as high-resolution custom metrics.
 
 - Connects to Postgres over the local unix socket as the `postgres` user (peer auth, no password).
 - Uses the EC2 instance profile for AWS credentials — no secrets on disk.
@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/datplor/db-stat-collector/main/inst
 | `--database`    | `postgres`                                         | Database to connect to                         |
 | `--dsn`         | built from `--database`                            | Full libpq/`postgres://` DSN (overrides above) |
 | `--namespace`   | `PostgreSQL`                                       | CloudWatch namespace                           |
-| `--interval`    | `2s`                                               | Collection interval (Go duration)              |
+| `--interval`    | `60s`                                              | Collection interval (Go duration)              |
 | `--cluster`     | *unset*                                            | Optional `ClusterName` dimension               |
 | `--user`        | `postgres`                                         | Unix user the service runs as                  |
 | `--repo-url`    | `https://github.com/dataplor/db-stat-collector.git` | Git remote to clone                 |

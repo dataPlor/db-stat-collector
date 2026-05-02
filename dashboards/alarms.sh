@@ -7,7 +7,7 @@
 #
 # Notifications are hardcoded to the ptu-alerts SNS topic on both ALARM and
 # OK transitions. Each alarm is named "<cluster>-<instance>-<suffix>", so a
-# 3-instance cluster ends up with 18 alarms (6 per instance). Re-running
+# 3-instance cluster ends up with 15 alarms (5 per instance). Re-running
 # this script upserts existing alarms; it does NOT delete alarms for
 # instances that have gone away.
 #
@@ -72,53 +72,6 @@ put_simple() {
         "${ACTIONS[@]}"
 }
 
-# TPS needs commits + rollbacks combined, so use a 2-metric math expression.
-put_tps() {
-    local iid="$1"
-    local name="${CLUSTER_PREFIX}-${iid}-tps-low"
-    local metrics
-    metrics=$(python3 - "$NS" "$CLUSTER" "$iid" <<'PY'
-import json, sys
-ns, cluster, iid = sys.argv[1:]
-def stat(name, mid):
-    return {
-        "Id": mid,
-        "MetricStat": {
-            "Metric": {
-                "Namespace": ns,
-                "MetricName": name,
-                "Dimensions": [
-                    {"Name": "ClusterName", "Value": cluster},
-                    {"Name": "InstanceId",  "Value": iid},
-                ],
-            },
-            "Period": 60,
-            "Stat": "Average",
-        },
-        "ReturnData": False,
-    }
-print(json.dumps([
-    stat("Commits", "c"),
-    stat("Rollbacks", "r"),
-    {"Id": "tps", "Expression": "c + r", "Label": "TPS",
-     "Period": 60, "ReturnData": True},
-]))
-PY
-)
-    echo "    - ${name}"
-    aws cloudwatch put-metric-alarm \
-        --region "$REGION" \
-        --alarm-name "$name" \
-        --alarm-description "Transactions/sec dropped below 5 (${iid})" \
-        --comparison-operator LessThanThreshold \
-        --evaluation-periods 3 \
-        --datapoints-to-alarm 3 \
-        --threshold 5 \
-        --treat-missing-data notBreaching \
-        --metrics "$metrics" \
-        "${ACTIONS[@]}"
-}
-
 echo "==> Putting alarms"
 for iid in "${INSTANCE_IDS[@]}"; do
     put_simple "$iid" connections-high \
@@ -128,8 +81,6 @@ for iid in "${INSTANCE_IDS[@]}"; do
     put_simple "$iid" cpu-high \
         "CPU used > 80%" \
         "System.CPU.UsedPercent" Average GreaterThanThreshold 80
-
-    put_tps "$iid"
 
     put_simple "$iid" cache-hit-low \
         "Cache hit ratio dropped below 80%" \
